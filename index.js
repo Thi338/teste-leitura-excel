@@ -1,38 +1,74 @@
 const express = require('express')
-const multer = require('multer')
-const excelToJson = require('convert-excel-to-json')
-const fs = require('fs')
 
 const app = express()
-const port = 3000
+const bodyParser = require('body-parser')
+const cors = require('cors')
+const fs = require('fs')
+const reader = require('xlsx')
+const path = require('path')
 
-var upload = multer({dest: "uploads/"})
-app.post('/read', upload.single('file'), (req, res) => {
-    try {
-        if (req.file.filename == null || req.file?.filename == 'undefined') {
-            res.status(400).json("No file")
-        } else {
-            var filePath = 'uploads' + req.file.filename
+app.use('/publicfiles', express.static(__dirname + '/publicfiles'))
+app.use(cors({
+    origin: '*'
+}))
+app.use(bodyParser.json({ limit: '50mb' }))
+app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }))
 
-            const excelData = excelToJson({
-                sourceFile : filePath,
-                header : {
-                    rows : 1
-                },
-                columnToKey: {
-                    "*" : "{{columnHeader}}",
-                },
-            })
+app.post("/upload", (req, res) => {
+    let base64 = req.body.base64
 
-            fs.remove(filePath)
+    let fileExtension = req.body.ext
 
-            res.status(200).json(excelData)
-        }
-    } catch (error) {
-        res.status(500)
+    let filename = Date.now().toString() + fileExtension
+    if (base64) {
+        let arr = base64.split(',')
+        fs.writeFile("publicfiles/" + filename, arr[1], 'base64', function(err) {
+            if (err) {
+                res.send(err)
+            } else {
+                console.log("uploaded!");
+                res.send("http://localhost:3000/publicfiles/" + filename)
+            }
+        })
     }
 })
 
-app.listen(port, () => {
-    console.log(`Node.js app listening on PORT ${port}`)
+ app.get("/readexcelfile", (req, res) => {
+    
+    const dir = './publicfiles'
+     
+    //console.log(path.basename(notes, path.extname(notes)) );
+
+     fs.readdir(dir , (err, arquivos) => {
+        arquivos.forEach(arquivo => {
+            
+            console.log(arquivo);
+            let data = []
+        try {
+        
+            const fileName = arquivo
+            const file = reader.readFile("publicfiles/" + fileName)
+            
+            const sheetNames = file.SheetNames
+
+            for (let i = 0; i < sheetNames.length; i++) {
+                const arr = reader.utils.sheet_to_json(
+                    file.Sheets[sheetNames[i]])
+                arr.forEach((res) => {
+                    data.push(res)
+                })
+            }
+
+            res.send(data)
+        } catch (err) {
+            res.send(err)
+        }
+        });
+      }); //req.query.filename
+      
+    
+})
+
+app.listen(3000, function() {
+    console.log("running on port 3000!");
 })
